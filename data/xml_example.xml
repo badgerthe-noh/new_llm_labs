@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore>
+  <book category="소설">
+    <title lang="ko">태백산맥</title>
+    <author>조정래</author>
+    <year>1986</year>
+    <price>35000</price>
+  </book>
+  <book category="과학">
+    <title lang="ko">코스모스</title>
+    <author>칼 세이건</author>
+    <year>1980</year>
+    <price>25000</price>
+  </book>
+  <book category="자기계발">
+    <title lang="ko">7년의 밤</title>
+    <author>정유정</author>
+    <year>2011</year>
+    <price>18000</price>
+  </book>
+  <book category="역사">
+    <title lang="ko">총, 균, 쇠</title>
+    <author>재레드 다이아몬드</author>
+    <year>1997</year>
+    <price>28000</price>
+  </book>
+</bookstore>
