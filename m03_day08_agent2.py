@@ -314,3 +314,167 @@ with col2:
     report_btn = st.button('3. 최종 보고서 생성', width='stretch')
     full_btn = st.button('4. 보고서 + 발표 + Q&A 한번에 생성', width='stretch')
 
+#====================세션 상태 초기화 =================================================
+# 스트림릿은 버튼을 누를 때 마다 스크립트 전체를 위->아래로 재실행한다.
+# 일반 변수는 재실행 될 때마다 초기화된다.
+# st.session_state에 저장한 값은 재실행 후에도 유지된다.
+if 'plan' not in st.session_state:
+    st.session_state.plan = ''
+if 'summary' not in st.session_state:
+    st.session_state.summary = ''
+if 'report' not in st.session_state:
+    st.session_state.report = ''
+if 'script' not in st.session_state:
+    st.session_state.script = ''
+if 'qa' not in st.session_state:
+    st.session_state.qa = ''
+
+#===============버튼 클릭 처리=========================================================
+# try~except 예외처리 --> 오류가 나도 프로그램이 비정상 종료 되지 않는다.
+try:
+    # 1. 조사 계획 생성
+    if plan_btn: # 버튼이 눌러졌다면
+        with st.spinner('조사 계획 생성 중...'):
+            system, user = build_plan_prompt(topic, audience, goal) # 계획 함수 호출
+            # 결과를 session_state 에 저장 -> 재실행 후에도 결과 유지
+            st.session_state.plan = call_llm(system, user) # llm 함수 호출
+
+    # 2. 자료 요약
+    if summary_btn:
+        # 자료 없이 요약버튼을 누르면 경고만 표시하고 API는 호출하지 않는다.
+        if not pasted_sources.strip():
+            st.warning('먼저 자료를 붙여넣어 주세요.')
+        else:
+            with st.spinner('자료 요약 중...'):
+                system, user = build_summary_prompt(topic, pasted_sources) # 요약 함수 호출
+                st.session_state.summary = call_llm(system, user) # llm 함수 호출
+    
+    # 3. 최종 보고서 생성
+    if report_btn:
+        if not pasted_sources.strip(): # 2번과 동일
+            st.warning('먼저 자료를 붙여넣어 주세요.')
+        else:
+            with st.spinner('보고서 생성 중...'):
+                system, user = build_report_prompt(topic, audience, goal, pasted_sources) # 보고서 함수 호출
+                st.session_state.report = call_llm(system, user) # llm 함수 호출
+
+    # 4. 보고서 + 발표 스크립트 + QnA 한번에 생성
+    if full_btn:
+        if not pasted_sources.strip():
+            st.warning('먼저 자료를 붙여넣어 주세요.')
+        else: 
+            # 보고서 -> 스크립트 -> QnA (단계별)
+            with st.spinner('보고서 생성 중...'):
+                system, user = build_report_prompt(topic, audience, goal, pasted_sources)
+                st.session_state.report = call_llm(system, user)
+            
+            # 이전 단계 결과(보고서)를 입력으로 사용
+            with st.spinner('발표 스크립트 생성 중...'):
+                system, user = build_script_prompt(topic, st.session_state.report)
+                st.session_state.script = call_llm(system, user)
+
+            # 이전 단계 결과(보고서)를 입력으로 사용
+            with st.spinner('예상 QnA 생성 중...'):
+                system, user = build_qa_prompt(topic, st.session_state.report)
+                st.session_state.qa = call_llm(system, user)
+
+except Exception as e: 
+    st.error('실행 중 오류가 발생했습니다.')
+    st.exception(e) # 디버깅에 유용
+
+# ============= 결과 출력 탭 ===============================================================
+st.markdown('---')
+st.subheader('결과')
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ['조사 계획', '자료 요약', '최종 보고서', '발표 스크립트', '예상 QnA']
+)
+
+with tab1:
+    if st.session_state.plan:
+        st.markdown(st.session_state.plan)
+    else: 
+        st.caption('조사 계획이 아직 없습니다.') # 회색 작은 글자
+
+with tab2:
+    if st.session_state.summary:
+        st.markdown(st.session_state.summary)
+    else:
+        st.caption('자료 요약이 아직 없습니다.')
+
+with tab3:
+    if st.session_state.report:
+        st.markdown(st.session_state.report)
+    else:
+        st.caption('최종 보고서가 아직 없습니다.')
+
+with tab4:
+    if st.session_state.script:
+        st.markdown(st.session_state.script)
+    else:
+        st.caption('발표 스크립트가 아직 없습니다.')
+
+with tab5:
+    if st.session_state.qa:
+        st.markdown(st.session_state.qa)
+    else:
+        st.caption('예상 QnA가 아직 없습니다.')
+
+# ======= 다운로드 버튼 표시 ==================================
+# 보고서, 발표 스크립트, QnA 중 하나라도 있으면 다운로드 버튼을 표시한다.
+if st.session_state.report or st.session_state.script or st.session_state.qa:
+    download_text = make_download_text(
+        topic = topic, 
+        report = st.session_state.report,
+        script= st.session_state.script,
+        qa = st.session_state.qa,
+    )
+    st.download_button(
+        label = 'Markdown 보고서 다운로드 ⬇️',
+        data = download_text,
+        file_name ='research_agent_report.md',
+        mime = 'text/markdown', # 브라우저에 파일 타입 알려준다.
+        width = 'stretch'   
+    )
+
+#========설명 접기/펼치기 ==========================
+# st.expander: 클릭하면 펼쳐지는 섹션, 부가 설명을 숨겨두기 좋다.
+with st.expander('이게 왜 Agent 인가요?'):
+    st.markdown(
+        '''
+### 단순 챗봇 vs. 워크플로우형 Agent
+
+| 구분 | 단순 챗봇 | 이 예제 (워크플로우형 Agent) |
+|------|-----------|---------------------------|
+| 처리 방식 | 질문 1개 → 답변 1개 | 목표를 여러 단계로 분해하여 순서대로 실행 |
+| 상태 관리 | 없음 | `st.session_state`로 단계별 결과 보존 |
+| 출력 체이닝 | 없음 | 보고서 → 스크립트 → Q&A 로 연결 |
+
+### 이 앱의 Agent 흐름
+
+```
+사용자 입력 (주제, 자료)
+        │
+        ▼
+① 조사 계획 생성    ← Planning 단계
+        │
+        ▼
+② 자료 요약         ← Observation 단계
+        │
+        ▼
+③ 보고서 작성       ← Action 단계 (핵심 산출물)
+        │
+        ▼
+④ 발표 스크립트     ← Transform 단계
+        │
+        ▼
+⑤ 예상 Q&A         ← Verification 단계
+```
+
+> 💡 **핵심**: 복잡한 프레임워크 없이도 "단계 분리 + 결과 체이닝"만으로
+> 워크플로우형 Agent를 구현할 수 있습니다.
+> LangGraph를 배우면 이 흐름을 그래프로 시각화하고 자동화할 수 있습니다.
+
+
+'''
+    )
